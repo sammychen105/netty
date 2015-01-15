@@ -17,22 +17,32 @@ package io.netty.channel.epoll;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelConfig;
-import io.netty.channel.DefaultChannelConfig;
+import io.netty.channel.ChannelOutboundBuffer;
+import io.netty.channel.ChannelPipeline;
 
 import java.net.SocketAddress;
 
 public final class EpollDomainSocketChannel extends AbstractEpollStreamChannel {
-    private final ChannelConfig config = new DefaultChannelConfig(this);
+    private final EpollDomainChannelConfig config = new EpollDomainChannelConfig(this);
 
     private volatile DomainSocketAddress local;
     private volatile DomainSocketAddress remote;
+
+    public EpollDomainSocketChannel() {
+        super(Native.socketDomainFd());
+    }
+
+    public EpollDomainSocketChannel(Channel parent, FileDescriptor fd) {
+        super(parent, fd.intValue());
+    }
 
     EpollDomainSocketChannel(Channel parent, int fd) {
         super(parent, fd);
     }
 
-    public EpollDomainSocketChannel() {
-        super(Native.socketDomainFd());
+    @Override
+    protected AbstractEpollUnsafe newUnsafe() {
+        return new EpollDomainUnsafe();
     }
 
     @Override
@@ -52,7 +62,7 @@ public final class EpollDomainSocketChannel extends AbstractEpollStreamChannel {
     }
 
     @Override
-    public ChannelConfig config() {
+    public EpollDomainChannelConfig config() {
         return config;
     }
 
@@ -74,5 +84,83 @@ public final class EpollDomainSocketChannel extends AbstractEpollStreamChannel {
     @Override
     public DomainSocketAddress localAddress() {
         return (DomainSocketAddress) super.localAddress();
+    }
+
+    @Override
+    protected boolean doWriteSingle(ChannelOutboundBuffer in) throws Exception {
+        Object msg = in.current();
+        if (msg instanceof FileDescriptor && Native.sendFd(fd(), ((FileDescriptor) msg).intValue()) > 0) {
+            // File descriptor was written, so remove it.
+            in.remove();
+            return true;
+        }
+        return super.doWriteSingle(in);
+    }
+
+    @Override
+    protected Object filterOutboundMessage(Object msg) {
+        if (msg instanceof FileDescriptor) {
+            return msg;
+        }
+        return super.filterOutboundMessage(msg);
+    }
+
+    private final class EpollDomainUnsafe extends EpollStreamUnsafe {
+        @Override
+        void epollInReady() {
+            switch (config().getReadMode()) {
+                case BYTES:
+                    super.epollInReady();
+                    break;
+                case FILE_DESCRIPTORS:
+                    epollInReadFd();
+                    break;
+                default:
+                    throw new Error();
+            }
+        }
+
+        private void epollInReadFd() {
+            final ChannelConfig config = config();
+            final ChannelPipeline pipeline = pipeline();
+
+            try {
+                for (;;) {
+                    int socketFd = Native.recvFd(fd);
+                    if (socketFd == 0) {
+                        break;
+                    }
+                    if (socketFd == -1) {
+                        close(voidPromise());
+                        return;
+                    }
+                    readPending = false;
+                    pipeline.fireChannelRead(new FileDescriptor(socketFd));
+                }
+                pipeline.fireChannelReadComplete();
+
+            } catch (Throwable t) {
+                pipeline.fireChannelReadComplete();
+                pipeline.fireExceptionCaught(t);
+                // trigger a read again as there may be something left to read and because of epoll ET we
+                // will not get notified again until we read everything from the socket
+                eventLoop().execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        epollInReady();
+                    }
+                });
+            } finally {
+                // Check if there is a readPending which was not processed yet.
+                // This could be for two reasons:
+                // * The user called Channel.read() or ChannelHandlerContext.read() in channelRead(...) method
+                // * The user called Channel.read() or ChannelHandlerContext.read() in channelReadComplete(...) method
+                //
+                // See https://github.com/netty/netty/issues/2254
+                if (!config.isAutoRead() && !readPending) {
+                    clearEpollIn0();
+                }
+            }
+        }
     }
 }

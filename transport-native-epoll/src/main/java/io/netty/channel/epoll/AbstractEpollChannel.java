@@ -33,6 +33,7 @@ import java.nio.channels.UnresolvedAddressException;
 abstract class AbstractEpollChannel extends AbstractChannel {
     private static final ChannelMetadata DATA = new ChannelMetadata(false);
     private final int readFlag;
+    private final FileDescriptor fileDescriptor;
     protected int flags;
     protected volatile boolean active;
     volatile int fd;
@@ -48,10 +49,22 @@ abstract class AbstractEpollChannel extends AbstractChannel {
         readFlag = flag;
         flags |= flag;
         this.active = active;
+        fileDescriptor = new FileDescriptor(fd);
     }
 
     protected int fd() {
         return fd;
+    }
+
+    /**
+     * Returns the {@link FileDescriptor} that is used by this {@link Channel}.
+     */
+    public FileDescriptor fileDescriptor() {
+        int fd = this.fd;
+        if (fd == -1) {
+            return FileDescriptor.INVALID;
+        }
+        return fileDescriptor;
     }
 
     @Override
