@@ -17,7 +17,6 @@ package io.netty.channel.epoll;
 
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.DefaultChannelConfig;
 import io.netty.channel.MessageSizeEstimator;
 import io.netty.channel.RecvByteBufAllocator;
 import io.netty.util.NetUtil;
@@ -28,13 +27,11 @@ import static io.netty.channel.ChannelOption.SO_BACKLOG;
 import static io.netty.channel.ChannelOption.SO_RCVBUF;
 import static io.netty.channel.ChannelOption.SO_REUSEADDR;
 
-public class EpollServerChannelConfig extends DefaultChannelConfig {
-    protected final AbstractEpollChannel channel;
+public class EpollServerChannelConfig extends EpollChannelConfig {
     private volatile int backlog = NetUtil.SOMAXCONN;
 
     EpollServerChannelConfig(AbstractEpollChannel channel) {
         super(channel);
-        this.channel = channel;
     }
 
     @Override
@@ -75,20 +72,20 @@ public class EpollServerChannelConfig extends DefaultChannelConfig {
     }
 
     public boolean isReuseAddress() {
-        return Native.isReuseAddress(channel.fd) == 1;
+        return Native.isReuseAddress(channel.fd()) == 1;
     }
 
     public EpollServerChannelConfig setReuseAddress(boolean reuseAddress) {
-        Native.setReuseAddress(channel.fd, reuseAddress ? 1 : 0);
+        Native.setReuseAddress(channel.fd(), reuseAddress ? 1 : 0);
         return this;
     }
 
     public int getReceiveBufferSize() {
-        return Native.getReceiveBufferSize(channel.fd);
+        return Native.getReceiveBufferSize(channel.fd());
     }
 
     public EpollServerChannelConfig setReceiveBufferSize(int receiveBufferSize) {
-        Native.setReceiveBufferSize(channel.fd, receiveBufferSize);
+        Native.setReceiveBufferSize(channel.fd(), receiveBufferSize);
         return this;
     }
 
@@ -159,7 +156,8 @@ public class EpollServerChannelConfig extends DefaultChannelConfig {
     }
 
     @Override
-    protected final void autoReadCleared() {
-        channel.clearEpollIn();
+    public EpollServerChannelConfig setEpollMode(EpollChannelOption.EpollMode mode) {
+        super.setEpollMode(mode);
+        return this;
     }
 }

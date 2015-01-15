@@ -17,7 +17,6 @@ package io.netty.channel.epoll;
 
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.DefaultChannelConfig;
 import io.netty.channel.FixedRecvByteBufAllocator;
 import io.netty.channel.MessageSizeEstimator;
 import io.netty.channel.RecvByteBufAllocator;
@@ -27,14 +26,12 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.Map;
 
-public final class EpollDatagramChannelConfig extends DefaultChannelConfig implements DatagramChannelConfig {
+public final class EpollDatagramChannelConfig extends EpollChannelConfig implements DatagramChannelConfig {
     private static final RecvByteBufAllocator DEFAULT_RCVBUF_ALLOCATOR = new FixedRecvByteBufAllocator(2048);
-    private final EpollDatagramChannel datagramChannel;
     private boolean activeOnOpen;
 
     EpollDatagramChannelConfig(EpollDatagramChannel channel) {
         super(channel);
-        datagramChannel = channel;
         setRecvByteBufAllocator(DEFAULT_RCVBUF_ALLOCATOR);
     }
 
@@ -192,56 +189,56 @@ public final class EpollDatagramChannelConfig extends DefaultChannelConfig imple
 
     @Override
     public int getSendBufferSize() {
-        return Native.getSendBufferSize(datagramChannel.fd);
+        return Native.getSendBufferSize(channel.fd());
     }
 
     @Override
     public EpollDatagramChannelConfig setSendBufferSize(int sendBufferSize) {
-        Native.setSendBufferSize(datagramChannel.fd, sendBufferSize);
+        Native.setSendBufferSize(channel.fd(), sendBufferSize);
         return this;
     }
 
     @Override
     public int getReceiveBufferSize() {
-        return Native.getReceiveBufferSize(datagramChannel.fd);
+        return Native.getReceiveBufferSize(channel.fd());
     }
 
     @Override
     public EpollDatagramChannelConfig setReceiveBufferSize(int receiveBufferSize) {
-        Native.setReceiveBufferSize(datagramChannel.fd, receiveBufferSize);
+        Native.setReceiveBufferSize(channel.fd(), receiveBufferSize);
         return this;
     }
 
     @Override
     public int getTrafficClass() {
-        return Native.getTrafficClass(datagramChannel.fd);
+        return Native.getTrafficClass(channel.fd());
     }
 
     @Override
     public EpollDatagramChannelConfig setTrafficClass(int trafficClass) {
-        Native.setTrafficClass(datagramChannel.fd, trafficClass);
+        Native.setTrafficClass(channel.fd(), trafficClass);
         return this;
     }
 
     @Override
     public boolean isReuseAddress() {
-        return Native.isReuseAddress(datagramChannel.fd) == 1;
+        return Native.isReuseAddress(channel.fd()) == 1;
     }
 
     @Override
     public EpollDatagramChannelConfig setReuseAddress(boolean reuseAddress) {
-        Native.setReuseAddress(datagramChannel.fd, reuseAddress ? 1 : 0);
+        Native.setReuseAddress(channel.fd(), reuseAddress ? 1 : 0);
         return this;
     }
 
     @Override
     public boolean isBroadcast() {
-        return Native.isBroadcast(datagramChannel.fd) == 1;
+        return Native.isBroadcast(channel.fd()) == 1;
     }
 
     @Override
     public EpollDatagramChannelConfig setBroadcast(boolean broadcast) {
-        Native.setBroadcast(datagramChannel.fd, broadcast ? 1 : 0);
+        Native.setBroadcast(channel.fd(), broadcast ? 1 : 0);
         return this;
     }
 
@@ -285,11 +282,17 @@ public final class EpollDatagramChannelConfig extends DefaultChannelConfig imple
         throw new UnsupportedOperationException("Multicast not supported");
     }
 
+    @Override
+    public EpollDatagramChannelConfig setEpollMode(EpollChannelOption.EpollMode mode) {
+        super.setEpollMode(mode);
+        return this;
+    }
+
     /**
      * Returns {@code true} if the SO_REUSEPORT option is set.
      */
     public boolean isReusePort() {
-        return Native.isReusePort(datagramChannel.fd) == 1;
+        return Native.isReusePort(channel.fd()) == 1;
     }
 
     /**
@@ -300,12 +303,7 @@ public final class EpollDatagramChannelConfig extends DefaultChannelConfig imple
      * any affect.
      */
     public EpollDatagramChannelConfig setReusePort(boolean reusePort) {
-        Native.setReusePort(datagramChannel.fd, reusePort ? 1 : 0);
+        Native.setReusePort(channel.fd(), reusePort ? 1 : 0);
         return this;
-    }
-
-    @Override
-    protected void autoReadCleared() {
-        datagramChannel.clearEpollIn();
     }
 }

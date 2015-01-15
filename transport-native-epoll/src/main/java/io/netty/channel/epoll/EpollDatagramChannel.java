@@ -84,7 +84,7 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
     @Override
     @SuppressWarnings("deprecation")
     public boolean isActive() {
-        return fd != -1 &&
+        return fd() != -1 &&
                 (config.getOption(ChannelOption.DATAGRAM_CHANNEL_ACTIVE_ON_REGISTRATION) && isRegistered()
                         || active);
     }
@@ -262,8 +262,8 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
     protected void doBind(SocketAddress localAddress) throws Exception {
         InetSocketAddress addr = (InetSocketAddress) localAddress;
         checkResolvable(addr);
-        Native.bind(fd, addr);
-        local = Native.localAddress(fd);
+        Native.bind(fd(), addr);
+        local = Native.localAddress(fd());
         active = true;
     }
 
@@ -273,7 +273,7 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
             Object msg = in.current();
             if (msg == null) {
                 // Wrote all messages.
-                clearEpollOut();
+                unsetFlag(Native.EPOLLOUT);
                 break;
             }
 
@@ -289,10 +289,10 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
                         NativeDatagramPacketArray.NativeDatagramPacket[] packets = array.packets();
 
                         while (cnt > 0) {
-                            int send = Native.sendmmsg(fd, packets, offset, cnt);
+                            int send = Native.sendmmsg(fd(), packets, offset, cnt);
                             if (send == 0) {
                                 // Did not write all messages.
-                                setEpollOut();
+                                setFlag(Native.EPOLLOUT);
                                 return;
                             }
                             for (int i = 0; i < send; i++) {
@@ -316,7 +316,7 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
                     in.remove();
                 } else {
                     // Did not write all messages.
-                    setEpollOut();
+                    setFlag(Native.EPOLLOUT);
                     break;
                 }
             } catch (IOException e) {
@@ -357,18 +357,18 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
         final int writtenBytes;
         if (data.hasMemoryAddress()) {
             long memoryAddress = data.memoryAddress();
-            writtenBytes = Native.sendToAddress(fd, memoryAddress, data.readerIndex(), data.writerIndex(),
+            writtenBytes = Native.sendToAddress(fd(), memoryAddress, data.readerIndex(), data.writerIndex(),
                     remoteAddress.getAddress(), remoteAddress.getPort());
         } else if (data instanceof CompositeByteBuf) {
             IovArray array = IovArrayThreadLocal.get((CompositeByteBuf) data);
             int cnt = array.count();
             assert cnt != 0;
 
-            writtenBytes = Native.sendToAddresses(fd, array.memoryAddress(0),
+            writtenBytes = Native.sendToAddresses(fd(), array.memoryAddress(0),
                     cnt, remoteAddress.getAddress(), remoteAddress.getPort());
         } else  {
             ByteBuffer nioData = data.internalNioBuffer(data.readerIndex(), data.readableBytes());
-            writtenBytes = Native.sendTo(fd, nioData, nioData.position(), nioData.limit(),
+            writtenBytes = Native.sendTo(fd(), nioData, nioData.position(), nioData.limit(),
                     remoteAddress.getAddress(), remoteAddress.getPort());
         }
 
@@ -476,7 +476,7 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
 
                     checkResolvable(remoteAddress);
                     EpollDatagramChannel.this.remote = remoteAddress;
-                    EpollDatagramChannel.this.local = Native.localAddress(fd);
+                    EpollDatagramChannel.this.local = Native.localAddress(fd());
                     success = true;
                 } finally {
                     if (!success) {
@@ -504,7 +504,12 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
             final ChannelPipeline pipeline = pipeline();
             Throwable exception = null;
             try {
-                for (;;) {
+                boolean edgeTriggered = isFlagSet(Native.EPOLLET);
+                // if edgeTriggered is used we need to read all messages as we are not notified again otherwise.
+                final int maxMessagesPerRead = edgeTriggered
+                        ? Integer.MAX_VALUE : config().getMaxMessagesPerRead();
+                int messages = 0;
+                do {
                     ByteBuf data = null;
                     try {
                         data = allocHandle.allocate(config.getAllocator());
@@ -513,11 +518,11 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
                         if (data.hasMemoryAddress()) {
                             // has a memory address so use optimized call
                             remoteAddress = Native.recvFromAddress(
-                                    fd, data.memoryAddress(), writerIndex, data.capacity());
+                                    fd(), data.memoryAddress(), writerIndex, data.capacity());
                         } else {
                             ByteBuffer nioData = data.internalNioBuffer(writerIndex, data.writableBytes());
                             remoteAddress = Native.recvFrom(
-                                    fd, nioData, nioData.position(), nioData.limit());
+                                    fd(), nioData, nioData.position(), nioData.limit());
                         }
 
                         if (remoteAddress == null) {
@@ -539,8 +544,14 @@ public final class EpollDatagramChannel extends AbstractEpollChannel implements 
                         if (data != null) {
                             data.release();
                         }
+                        if (!edgeTriggered && !config().isAutoRead()) {
+                            // This is not using EPOLLET so we can stop reading
+                            // ASAP as we will get notified again later with
+                            // pending data
+                            break;
+                        }
                     }
-                }
+                } while (++ messages < maxMessagesPerRead);
 
                 int size = readBuf.size();
                 for (int i = 0; i < size; i ++) {

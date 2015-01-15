@@ -57,7 +57,7 @@ public final class EpollDomainSocketChannel extends AbstractEpollStreamChannel {
 
     @Override
     protected void doBind(SocketAddress localAddress) throws Exception {
-        Native.bind(fd, localAddress);
+        Native.bind(fd(), localAddress);
         local = (DomainSocketAddress) localAddress;
     }
 
@@ -126,7 +126,7 @@ public final class EpollDomainSocketChannel extends AbstractEpollStreamChannel {
 
             try {
                 for (;;) {
-                    int socketFd = Native.recvFd(fd);
+                    int socketFd = Native.recvFd(fd());
                     if (socketFd == 0) {
                         break;
                     }

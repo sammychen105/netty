@@ -16,11 +16,6 @@
 #include <jni.h>
 #include <limits.h>
 
-#define EPOLL_READ 0x01
-#define EPOLL_WRITE 0x02
-#define EPOLL_ACCEPT 0x04
-#define EPOLL_RDHUP 0x08
-
 // Define SO_REUSEPORT if not found to fix build issues.
 // See https://github.com/netty/netty/issues/2558
 #ifndef SO_REUSEPORT
@@ -116,3 +111,8 @@ jint Java_io_netty_channel_epoll_Native_errnoEAGAIN(JNIEnv *env, jclass clazz);
 jint Java_io_netty_channel_epoll_Native_errnoEWOULDBLOCK(JNIEnv *env, jclass clazz);
 jint Java_io_netty_channel_epoll_Native_errnoEINPROGRESS(JNIEnv *env, jclass clazz);
 jstring Java_io_netty_channel_epoll_Native_strError(JNIEnv *env, jclass clazz, jint err);
+
+jint Java_io_netty_channel_epoll_Native_epollin(JNIEnv *env, jclass clazz);
+jint Java_io_netty_channel_epoll_Native_epollout(JNIEnv *env, jclass clazz);
+jint Java_io_netty_channel_epoll_Native_epollrdhup(JNIEnv *env, jclass clazz);
+jint Java_io_netty_channel_epoll_Native_epollet(JNIEnv *env, jclass clazz);

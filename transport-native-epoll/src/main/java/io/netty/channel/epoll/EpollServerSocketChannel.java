@@ -45,9 +45,9 @@ public final class EpollServerSocketChannel extends AbstractEpollServerChannel i
     protected void doBind(SocketAddress localAddress) throws Exception {
         InetSocketAddress addr = (InetSocketAddress) localAddress;
         checkResolvable(addr);
-        Native.bind(fd, addr);
-        local = Native.localAddress(fd);
-        Native.listen(fd, config.getBacklog());
+        Native.bind(fd(), addr);
+        local = Native.localAddress(fd());
+        Native.listen(fd(), config.getBacklog());
         active = true;
     }
 

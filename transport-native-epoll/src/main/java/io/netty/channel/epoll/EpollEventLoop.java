@@ -121,12 +121,12 @@ final class EpollEventLoop extends SingleThreadEventLoop {
     }
 
     /**
-     * Register the given epoll with this {@link io.netty.channel.EventLoop}.
+     * Register the given epoll with this {@link EventLoop}.
      */
     void add(AbstractEpollChannel ch) {
         assert inEventLoop();
         int id = nextId();
-        Native.epollCtlAdd(epollFd, ch.fd, ch.flags, id);
+        Native.epollCtlAdd(epollFd, ch.fd(), ch.flags(), id);
         ch.id = id;
         ids.put(id, ch);
     }
@@ -136,18 +136,18 @@ final class EpollEventLoop extends SingleThreadEventLoop {
      */
     void modify(AbstractEpollChannel ch) {
         assert inEventLoop();
-        Native.epollCtlMod(epollFd, ch.fd, ch.flags, ch.id);
+        Native.epollCtlMod(epollFd, ch.fd(), ch.flags(), ch.id);
     }
 
     /**
-     * Deregister the given epoll from this {@link io.netty.channel.EventLoop}.
+     * Deregister the given epoll from this {@link EventLoop}.
      */
     void remove(AbstractEpollChannel ch) {
         assert inEventLoop();
         if (ids.remove(ch.id) != null && ch.isOpen()) {
             // Remove the epoll. This is only needed if it's still open as otherwise it will be automatically
             // removed once the file-descriptor is closed.
-            Native.epollCtlDel(epollFd, ch.fd);
+            Native.epollCtlDel(epollFd, ch.fd());
         }
     }
 

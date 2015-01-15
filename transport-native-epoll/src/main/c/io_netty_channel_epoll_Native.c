@@ -105,17 +105,7 @@ char* exceptionMessage(char* msg, int error) {
 }
 
 jint epollCtl(JNIEnv* env, jint efd, int op, jint fd, jint flags, jint id) {
-    uint32_t events = EPOLLET;
-
-    if (flags & EPOLL_ACCEPT) {
-        events |= EPOLLIN;
-    }
-    if (flags & EPOLL_READ) {
-        events |= EPOLLIN | EPOLLRDHUP;
-    }
-    if (flags & EPOLL_WRITE) {
-        events |= EPOLLOUT;
-    }
+    uint32_t events = flags;
 
     struct epoll_event ev = {
         .events = events,
@@ -656,15 +646,7 @@ JNIEXPORT jint JNICALL Java_io_netty_channel_epoll_Native_epollWait(JNIEnv* env,
     for (i = 0; i < ready; i++) {
         // store the ready ops and id
         elements[i] = (jlong) ev[i].data.u64;
-        if (ev[i].events & EPOLLIN) {
-            elements[i] |= EPOLL_READ;
-        }
-        if (ev[i].events & EPOLLRDHUP) {
-            elements[i] |= EPOLL_RDHUP;
-        }
-        if (ev[i].events & EPOLLOUT) {
-            elements[i] |= EPOLL_WRITE;
-        }
+        elements[i] |= ev[i].events;
     }
     jint mode;
     // release again to prevent memory leak
@@ -1356,6 +1338,22 @@ JNIEXPORT jint JNICALL Java_io_netty_channel_epoll_Native_socketDomain(JNIEnv* e
         return -errno;
     }
     return fd;
+}
+
+JNIEXPORT jint JNICALL Java_io_netty_channel_epoll_Native_epollin(JNIEnv* env, jclass clazz) {
+    return EPOLLIN;
+}
+
+JNIEXPORT jint JNICALL Java_io_netty_channel_epoll_Native_epollout(JNIEnv* env, jclass clazz) {
+    return EPOLLOUT;
+}
+
+JNIEXPORT jint JNICALL Java_io_netty_channel_epoll_Native_epollrdhup(JNIEnv* env, jclass clazz) {
+    return EPOLLRDHUP;
+}
+
+JNIEXPORT jint JNICALL Java_io_netty_channel_epoll_Native_epollet(JNIEnv* env, jclass clazz) {
+    return EPOLLET;
 }
 
 JNIEXPORT jint JNICALL Java_io_netty_channel_epoll_Native_bindDomainSocket(JNIEnv * env, jclass clazz, jint fd, jstring socketPath) {
